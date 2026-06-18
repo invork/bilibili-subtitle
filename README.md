@@ -14,14 +14,10 @@
 ## 环境要求
 
 - Node.js >= 14.0
-- Microsoft Edge浏览器（用于自动获取Cookie）
 
 ## 安装
 
-```bash
-git clone git@github.com:invork/project.git
-cd project
-```
+将bilibili-subtitle/文件夹放置于`~/.mimocode/skilks/`中即可（claude code同理）。
 
 ## 使用方法
 
