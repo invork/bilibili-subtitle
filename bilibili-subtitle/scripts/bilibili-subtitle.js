@@ -51,12 +51,31 @@ async function getPlayerInfo(bvid, cid, cookie) {
 }
 
 async function getSubtitleContent(url, cookie) {
+  if (!url) {
+    throw new Error('Subtitle URL is empty');
+  }
+  
   const fullUrl = url.startsWith('//') ? `https:${url}` : url;
   const headers = { 'User-Agent': 'Mozilla/5.0', 'Referer': 'https://www.bilibili.com' };
   if (cookie) headers['Cookie'] = cookie;
 
-  const r = await fetch(fullUrl, { headers });
-  return r.body?.map(item => item.content).join('\n') || '';
+  try {
+    const r = await fetch(fullUrl, { headers });
+    return r.body?.map(item => item.content).join('\n') || '';
+  } catch (e) {
+    throw new Error(`Failed to fetch subtitle content: ${e.message}`);
+  }
+}
+
+function checkSubtitleMatch(content, title) {
+  if (!content || !title) return false;
+  
+  // Simple heuristic: check if first line contains keywords from title
+  const firstLine = content.split('\n')[0].toLowerCase();
+  const titleWords = title.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+  
+  // Check if any significant word from title appears in first line
+  return titleWords.some(word => firstLine.includes(word));
 }
 
 async function main() {
@@ -111,7 +130,59 @@ async function main() {
     }
 
     const sub = subtitles[0];
-    const content = await getSubtitleContent(sub.subtitle_url, cookie);
+    
+    // Check if subtitle_url is empty or invalid
+    if (!sub.subtitle_url) {
+      console.error('');
+      console.error('Error: Subtitle URL is empty or missing.');
+      console.error('This may be due to Bilibili API returning non-deterministic responses.');
+      console.error('Suggestions:');
+      console.error('  1. Try again in a few seconds');
+      console.error('  2. Ensure your cookie is valid and not expired');
+      console.error('  3. Try a different video to verify cookie works');
+      process.exit(1);
+    }
+    
+    // Try to get subtitle content with retry logic
+    let content = null;
+    let attempts = 0;
+    const maxAttempts = 3;
+    
+    while (attempts < maxAttempts) {
+      try {
+        content = await getSubtitleContent(sub.subtitle_url, cookie);
+        
+        // Check if content matches video title (simple heuristic)
+        if (checkSubtitleMatch(content, title)) {
+          break; // Content seems correct
+        }
+        
+        attempts++;
+        if (attempts < maxAttempts) {
+          console.error(`Attempt ${attempts}: Subtitle content may not match video. Retrying...`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      } catch (e) {
+        attempts++;
+        if (attempts >= maxAttempts) {
+          throw e;
+        }
+        console.error(`Attempt ${attempts}: ${e.message}. Retrying...`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+    
+    if (!content) {
+      console.error('');
+      console.error('Error: Failed to get valid subtitle content after multiple attempts.');
+      console.error('This may be due to Bilibili API returning non-deterministic responses.');
+      console.error('Suggestions:');
+      console.error('  1. Try again later');
+      console.error('  2. Ensure your cookie is valid');
+      console.error('  3. Try a different video');
+      process.exit(1);
+    }
+    
     if (outputArg) {
       const outputPath = outputArg.split('=').slice(1).join('=');
       const absolutePath = path.resolve(outputPath);
@@ -123,6 +194,12 @@ async function main() {
     }
   } catch (e) {
     console.error(`Error: ${e.message}`);
+    console.error('');
+    console.error('Possible causes:');
+    console.error('  1. Invalid or expired cookie - try getting a new cookie');
+    console.error('  2. Network issues - check your internet connection');
+    console.error('  3. Bilibili API issues - try again later');
+    console.error('  4. Invalid video URL or BV ID');
     process.exit(1);
   }
 }
