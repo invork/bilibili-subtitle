@@ -1,6 +1,6 @@
 # Bilibili Subtitle Fetcher
 
-从B站（Bilibili）视频中提取字幕的命令行工具。支持AI生成字幕和CC字幕，输出纯文本格式。
+从B站（Bilibili）视频中提取字幕的命令行工具。支持AI生成字幕和CC字幕，支持输出纯文本或Markdown格式。
 
 ## 功能特性
 
@@ -10,6 +10,7 @@
 - 自动获取Cookie（通过Edge浏览器CDP协议）
 - 纯Node.js实现，无外部依赖
 - 字幕自动解码（无需手动处理URL编码）
+- 支持保存为Markdown文件格式（带视频标题）
 
 ## 环境要求
 
@@ -70,7 +71,8 @@ project/
 │               ├── bilibili-subtitle.js    # 字幕获取主脚本
 │               └── get-bilibili-cookie.js  # Cookie自动提取脚本
 ├── README.md                               # 项目说明文档
-└── subtitle_BV*.txt                        # 生成的字幕文件
+├── subtitle_BV*.txt                        # 生成的字幕文件（纯文本）
+└── subtitle_BV*.md                         # 生成的字幕文件（Markdown）
 ```
 
 ## API说明
@@ -81,10 +83,12 @@ project/
 |------|------|
 | `<url-or-bvid>` | BV号或完整URL（必填） |
 | `--cookie=SESSDATA=xxx` | B站Cookie（获取AI字幕时需要） |
+| `--output=file.md` | 保存为Markdown文件（可选） |
 
 **输出：**
-- stdout：纯文本字幕内容
+- stdout：纯文本字幕内容（未指定--output时）
 - stderr：视频信息、错误提示、使用说明
+- 文件：Markdown格式字幕（指定--output时）
 
 ### get-bilibili-cookie.js
 
@@ -109,6 +113,10 @@ project/
 # 获取视频字幕并保存到文件
 $cookie = node .mimocode/skills/bilibili-subtitle/scripts/get-bilibili-cookie.js 2>$null
 node .mimocode/skills/bilibili-subtitle/scripts/bilibili-subtitle.js BV19a9HBEEJx --cookie="SESSDATA=$cookie" > subtitle.txt
+
+# 保存为Markdown格式
+$cookie = node .mimocode/skills/bilibili-subtitle/scripts/get-bilibili-cookie.js 2>$null
+node .mimocode/skills/bilibili-subtitle/scripts/bilibili-subtitle.js BV19a9HBEEJx --cookie="SESSDATA=$cookie" --output=subtitle.md
 
 # 批量获取（PowerShell）
 $cookie = node .mimocode/skills/bilibili-subtitle/scripts/get-bilibili-cookie.js 2>$null
