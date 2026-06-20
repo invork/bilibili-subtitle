@@ -1,6 +1,8 @@
 const https = require('https');
 const http = require('http');
 const { URL } = require('url');
+const fs = require('fs');
+const path = require('path');
 
 function fetch(urlStr, options = {}) {
   const url = new URL(urlStr);
@@ -61,12 +63,14 @@ async function main() {
   const args = process.argv.slice(2);
   const input = args.find(a => !a.startsWith('--'));
   const cookieArg = args.find(a => a.startsWith('--cookie='));
+  const outputArg = args.find(a => a.startsWith('--output='));
 
   if (!input) {
     console.error('Usage: node scripts/bilibili-subtitle.js <url-or-bvid> [--cookie=SESSDATA=xxx]');
     console.error('');
     console.error('Options:');
     console.error('  --cookie=SESSDATA=xxx   Bilibili cookie for AI subtitles');
+    console.error('  --output=file.md        Save subtitles to markdown file');
     console.error('');
     console.error('Examples:');
     console.error('  node scripts/bilibili-subtitle.js BV1GJ411x7h7');
@@ -108,7 +112,15 @@ async function main() {
 
     const sub = subtitles[0];
     const content = await getSubtitleContent(sub.subtitle_url, cookie);
-    console.log(content || 'No subtitle content');
+    if (outputArg) {
+      const outputPath = outputArg.split('=').slice(1).join('=');
+      const absolutePath = path.resolve(outputPath);
+      const markdownContent = `# ${title}\n\n${content || 'No subtitle content'}`;
+      fs.writeFileSync(absolutePath, markdownContent, 'utf8');
+      console.error(`Subtitles saved to ${absolutePath}`);
+    } else {
+      console.log(content || 'No subtitle content');
+    }
   } catch (e) {
     console.error(`Error: ${e.message}`);
     process.exit(1);

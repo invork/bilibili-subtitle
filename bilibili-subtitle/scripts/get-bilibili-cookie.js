@@ -17,38 +17,55 @@ function checkPort(port) {
   });
 }
 
-function launchEdge() {
+// Fire-and-forget Edge launch, then poll until CDP port is ready (max 30s).
+// Uses spawn with detached+unref so Edge runs independently — exec callback
+// would hang forever because Edge as the main browser instance never exits.
+async function launchAndWaitForCDP() {
   return new Promise((resolve, reject) => {
-    exec(`"${EDGE_PATH}" --remote-debugging-port=${DEBUG_PORT} ${BILIBILI_URL}`, (error) => {
-      if (error) {
-        console.error(`Error launching Edge: ${error.message}`);
-        reject(error);
-        return;
+    const child = exec(
+      `"${EDGE_PATH}" --remote-debugging-port=${DEBUG_PORT} ${BILIBILI_URL}`,
+      (error) => {
+        // Edge exiting early means it attached to an existing instance
+        // (singleton model) — the CDP flag was ignored. That's not an error
+        // from exec's perspective, but we'll detect it during polling.
       }
-      setTimeout(resolve, 3000);
-    });
+    );
+    // Don't wait for the child process — Edge stays running
+    child.unref();
+
+    // Poll for CDP port to become available
+    let attempts = 0;
+    const maxAttempts = 30;
+    const poll = setInterval(async () => {
+      attempts++;
+      if (await isCDPActive()) {
+        clearInterval(poll);
+        resolve();
+      } else if (attempts >= maxAttempts) {
+        clearInterval(poll);
+        reject(new Error('CDP port did not become available within 30s'));
+      }
+    }, 1000);
   });
 }
 
-function restartEdgeWithCDP() {
+async function launchEdge() {
+  console.error('Launching Edge with debugging port...');
+  await launchAndWaitForCDP();
+}
+
+async function restartEdgeWithCDP() {
   console.error('Closing all Edge processes...');
   try {
     execSync('taskkill /F /IM msedge.exe /T 2>nul', { stdio: 'ignore' });
   } catch (e) {
     // Ignore errors if Edge is not running
   }
-  
+  // Give processes a moment to fully exit
+  await sleep(2000);
+
   console.error('Launching Edge with debugging port...');
-  return new Promise((resolve, reject) => {
-    exec(`"${EDGE_PATH}" --remote-debugging-port=${DEBUG_PORT} ${BILIBILI_URL}`, (error) => {
-      if (error) {
-        console.error(`Error launching Edge: ${error.message}`);
-        reject(error);
-        return;
-      }
-      setTimeout(resolve, 3000);
-    });
-  });
+  await launchAndWaitForCDP();
 }
 
 function httpGet(url) {
@@ -173,6 +190,9 @@ async function getCookieViaWebSocket(wsUrl) {
                 if (!resolved) {
                   resolved = true;
                   socket.end();
+                  // Bilibili's server expects the decoded SESSDATA (with literal
+                  // commas, not %2C). The percent-encoded form returns
+                  // wrong/different AI subtitles than the decoded form.
                   resolve(session ? decodeURIComponent(session.value) : null);
                 }
               }
@@ -245,14 +265,10 @@ async function main() {
       console.error('Edge is already running without CDP port.');
       console.error('Closing Edge and restarting with debugging port...');
       await restartEdgeWithCDP();
-      console.error('Edge restarted. Waiting for page to load...');
-      await sleep(3000);
     } else {
-      console.error('Launching Edge with debugging port...');
       await launchEdge();
-      console.error('Edge launched. Waiting for page to load...');
-      await sleep(3000);
     }
+    console.error('Edge is ready with CDP port.');
   }
 
   console.error('Waiting for SESSDATA cookie...');
