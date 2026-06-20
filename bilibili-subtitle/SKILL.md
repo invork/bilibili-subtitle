@@ -45,17 +45,16 @@ node scripts/get-bilibili-cookie.js
 
 This script will:
 1. Auto-launch Edge with debugging port (if not already running with CDP)
-2. If Edge is already running without CDP, launch a new Edge instance with separate user data
+2. If Edge is already running without CDP, close Edge and restart with debugging port
 3. Wait for you to login to bilibili.com
 4. Extract and output the decoded SESSDATA value
-5. Clean up temporary files automatically
 
 Then use it directly:
 ```bash
 node scripts/bilibili-subtitle.js BV1xxxxxx --cookie=SESSDATA=$(node scripts/get-bilibili-cookie.js)
 ```
 
-**Note:** When Edge is already running without CDP, the script will create a temporary user data directory. You'll need to login to bilibili.com in the new Edge window. The temporary directory is automatically cleaned up after cookie extraction.
+**Note:** When Edge is already running without CDP, the script will close all Edge windows and restart with debugging port. Your Bilibili login session is preserved because cookies are stored on disk.
 
 ### Manual Get Cookie
 

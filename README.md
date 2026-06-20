@@ -48,9 +48,8 @@ node .mimocode/skills/bilibili-subtitle/scripts/bilibili-subtitle.js BV1xxxxxx -
 
 **特性：**
 - 自动检测Edge是否已运行
-- 如果Edge已运行但未启用CDP，会自动启动一个新的Edge实例（使用临时用户数据目录）
-- 不会关闭现有的Edge窗口
-- 自动清理临时文件
+- 如果Edge已运行但未启用CDP，会自动关闭Edge并重启（保留登录态）
+- Cookie存储在磁盘上，重启后登录状态不丢失
 
 注意：由于脚步文件基于Microsoft Edge浏览器获取cookie，因此 该流程目前仅适用于Microsoft Edge浏览器
 

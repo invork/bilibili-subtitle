@@ -3,9 +3,6 @@ const { exec, execSync } = require('child_process');
 const net = require('net');
 const crypto = require('crypto');
 const { URL } = require('url');
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
 
 const EDGE_PATH = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
 const DEBUG_PORT = 9222;
@@ -20,45 +17,36 @@ function checkPort(port) {
   });
 }
 
-function createTempUserDataDir() {
-  const tempDir = path.join(os.tmpdir(), `edge-cdp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
-  fs.mkdirSync(tempDir, { recursive: true });
-  return tempDir;
-}
-
-function cleanupTempDir(dir) {
-  try {
-    if (fs.existsSync(dir)) {
-      fs.rmSync(dir, { recursive: true, force: true });
-    }
-  } catch (e) {
-    console.error(`Warning: Could not clean up temp directory ${dir}: ${e.message}`);
-  }
-}
-
-function launchEdge(useTempDir = false) {
+function launchEdge() {
   return new Promise((resolve, reject) => {
-    let tempDir = null;
-    let command = `"${EDGE_PATH}" --remote-debugging-port=${DEBUG_PORT}`;
-    
-    if (useTempDir) {
-      tempDir = createTempUserDataDir();
-      command += ` --user-data-dir="${tempDir}"`;
-      command += ` --no-first-run --disable-features=msEdgeProfileSelection`;
-      command += ` --disable-extensions --disable-component-update`;
-      console.error(`Using temporary user data directory: ${tempDir}`);
-    }
-    
-    command += ` ${BILIBILI_URL}`;
-    
-    exec(command, (error, stdout, stderr) => {
+    exec(`"${EDGE_PATH}" --remote-debugging-port=${DEBUG_PORT} ${BILIBILI_URL}`, (error) => {
       if (error) {
         console.error(`Error launching Edge: ${error.message}`);
-        if (tempDir) cleanupTempDir(tempDir);
         reject(error);
         return;
       }
-      setTimeout(() => resolve(tempDir), 3000);
+      setTimeout(resolve, 3000);
+    });
+  });
+}
+
+function restartEdgeWithCDP() {
+  console.error('Closing all Edge processes...');
+  try {
+    execSync('taskkill /F /IM msedge.exe /T 2>nul', { stdio: 'ignore' });
+  } catch (e) {
+    // Ignore errors if Edge is not running
+  }
+  
+  console.error('Launching Edge with debugging port...');
+  return new Promise((resolve, reject) => {
+    exec(`"${EDGE_PATH}" --remote-debugging-port=${DEBUG_PORT} ${BILIBILI_URL}`, (error) => {
+      if (error) {
+        console.error(`Error launching Edge: ${error.message}`);
+        reject(error);
+        return;
+      }
+      setTimeout(resolve, 3000);
     });
   });
 }
@@ -238,24 +226,6 @@ async function isCDPActive() {
 
 async function main() {
   const cdpActive = await isCDPActive();
-  let tempDir = null;
-
-  // Set up cleanup on process exit
-  const cleanup = () => {
-    if (tempDir) {
-      cleanupTempDir(tempDir);
-    }
-  };
-  
-  process.on('exit', cleanup);
-  process.on('SIGINT', () => {
-    cleanup();
-    process.exit(130);
-  });
-  process.on('SIGTERM', () => {
-    cleanup();
-    process.exit(143);
-  });
 
   if (cdpActive) {
     console.error('Edge is running with debugging port.');
@@ -273,9 +243,9 @@ async function main() {
     
     if (edgeRunning) {
       console.error('Edge is already running without CDP port.');
-      console.error('Launching a new Edge instance with separate user data...');
-      tempDir = await launchEdge(true);
-      console.error('New Edge instance launched. Waiting for page to load...');
+      console.error('Closing Edge and restarting with debugging port...');
+      await restartEdgeWithCDP();
+      console.error('Edge restarted. Waiting for page to load...');
       await sleep(3000);
     } else {
       console.error('Launching Edge with debugging port...');
@@ -288,9 +258,6 @@ async function main() {
   console.error('Waiting for SESSDATA cookie...');
   console.error('If not logged in, please login to bilibili.com in the Edge window.');
   const sessdata = await waitForSESSDATA();
-
-  // Clean up temporary directory if we created one
-  cleanup();
 
   if (sessdata) {
     console.log(sessdata);
